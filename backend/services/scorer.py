@@ -1,4 +1,4 @@
-from services.qwen_service import ask_qwen
+from services.deepseek_service import ask_deepseek
 
 def score_prompt(prompt):
 
@@ -21,4 +21,4 @@ Prompt:
 {prompt}
 """
 
-    return ask_qwen(query)
+    return ask_deepseek(query)

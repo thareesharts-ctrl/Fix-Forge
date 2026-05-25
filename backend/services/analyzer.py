@@ -1,4 +1,4 @@
-from services.qwen_service import ask_qwen
+from services.deepseek_service import ask_deepseek
 
 def analyze_prompt(prompt):
 
@@ -23,4 +23,4 @@ Return STRICT JSON with:
 }}
 """
 
-    return ask_qwen(query)
+    return ask_deepseek(query)
