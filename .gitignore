@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# VS Code / IDE settings
+.vscode/
+.idea/
+
+# Backend response test files & outputs
+backend/cleaned_response.txt
+backend/raw_response.txt
+backend/sanitized_response.txt
+backend/parse_error.txt
+backend/uploads/*
+!backend/uploads/.gitkeep
