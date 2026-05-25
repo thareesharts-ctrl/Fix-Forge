@@ -18,12 +18,25 @@ def clean_json_response(raw_string: str) -> dict:
     if not raw_string:
         return {}
     
-    # Strip markdown code fences if present
     raw_string = raw_string.strip()
+    
+    # Try direct parse first before any modifications (very safe for strict JSON providers like Gemini)
+    try:
+        return json.loads(raw_string)
+    except Exception:
+        pass
+
+    # Strip markdown code fences if present
     if raw_string.startswith("```"):
         raw_string = re.sub(r"^```[a-zA-Z0-9]*\s*", "", raw_string)
         raw_string = re.sub(r"\s*```$", "", raw_string)
         
+    # Try parsing again after stripping fences
+    try:
+        return json.loads(raw_string)
+    except Exception:
+        pass
+
     # Try finding the first '{' and last '}' to strip any conversational prefix/suffix
     start = raw_string.find('{')
     end = raw_string.rfind('}')
@@ -33,30 +46,16 @@ def clean_json_response(raw_string: str) -> dict:
         
     cleaned = raw_string[start:end+1].strip()
     
-    # Quote unquoted keys (like metric: -> "metric":)
-    cleaned = re.sub(r'([{,\s]+)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', cleaned)
-    
-    # Locate "optimized_prompt" key and escape its inner quotes/newlines/tabs to ensure perfect JSON format
-    opt_key_match = re.search(r'"optimized_prompt"\s*:\s*"', cleaned)
-    if opt_key_match:
-        opt_start = opt_key_match.end()
-        closing_brace_idx = cleaned.rfind('}')
-        if closing_brace_idx != -1:
-            opt_end = cleaned.rfind('"', opt_start, closing_brace_idx)
-            if opt_end != -1:
-                # Extract and escape raw prompt content
-                raw_opt_prompt = cleaned[opt_start:opt_end]
-                escaped_opt_prompt = raw_opt_prompt.replace('\\', '\\\\')
-                escaped_opt_prompt = escaped_opt_prompt.replace('"', '\\"')
-                escaped_opt_prompt = escaped_opt_prompt.replace('\n', '\\n')
-                escaped_opt_prompt = escaped_opt_prompt.replace('\r', '\\r')
-                escaped_opt_prompt = escaped_opt_prompt.replace('\t', '\\t')
-                
-                cleaned = cleaned[:opt_start] + escaped_opt_prompt + cleaned[opt_end:]
-                
-    # Try standard parse
+    # Try standard parse on extracted braces
     try:
         return json.loads(cleaned)
+    except Exception:
+        pass
+    
+    # Quote unquoted keys (like metric: -> "metric":) only if it fails to parse directly
+    try:
+        quoted = re.sub(r'([{,\s]+)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', cleaned)
+        return json.loads(quoted)
     except Exception:
         pass
         
@@ -68,6 +67,7 @@ def clean_json_response(raw_string: str) -> dict:
         pass
         
     return {"raw": raw_string}
+
 
 async def process_prompt_evaluation(prompt_text: str) -> dict:
     """Helper to coordinate prompt engineering audits using the unified Quality Auditor."""

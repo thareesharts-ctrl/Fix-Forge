@@ -1339,8 +1339,9 @@
                     <!-- Optimized Output -->
                     <div class="coach-output-box">
                         <div class="coach-output-header">
-                            <span>✨ QWEN restructURed prompt coach version</span>
+                            <span>✨ prompt coaching</span>
                             <div class="coach-actions">
+
                                 <button class="action-btn" id="copyBtn">Copy Prompt</button>
                                 <button class="action-btn primary" id="applyBtn">Apply to Workspace</button>
                             </div>
@@ -1639,7 +1640,7 @@
                         loadHistory();
                     } else {
                         const err = await response.json();
-                        alert("Qwen Engine error: " + err.detail);
+                        alert("Gemini Engine error: " + err.detail);
                         runSandboxFallback(prompt);
                     }
                 } catch (e) {
