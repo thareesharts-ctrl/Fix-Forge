@@ -1,4 +1,4 @@
-from services.deepseek_service import ask_deepseek
+from services.gemini_service import ask_gemini
 
 def analyze_prompt(prompt):
 
@@ -23,4 +23,5 @@ Return STRICT JSON with:
 }}
 """
 
-    return ask_deepseek(query)
+    return ask_gemini(query, response_json=True)
+

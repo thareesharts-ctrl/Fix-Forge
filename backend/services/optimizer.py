@@ -1,4 +1,4 @@
-from services.deepseek_service import ask_deepseek
+from services.gemini_service import ask_gemini
 
 def optimize_prompt(prompt):
 
@@ -15,4 +15,5 @@ Prompt:
 {prompt}
 """
 
-    return ask_deepseek(query)
+    return ask_gemini(query)
+

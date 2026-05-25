@@ -1,4 +1,4 @@
-from services.deepseek_service import ask_deepseek
+from services.gemini_service import ask_gemini
 
 def audit_prompt_quality(prompt_text: str) -> str:
     """
@@ -78,4 +78,5 @@ Return a STRICT, valid JSON object. Do not wrap it in anything else, just the JS
   "optimized_prompt": "Redesigned version of prompt..."
 }}
 """
-    return ask_deepseek(query)
+    return ask_gemini(query, response_json=True)
+

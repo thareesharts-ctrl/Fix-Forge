@@ -1,4 +1,4 @@
-from services.deepseek_service import ask_deepseek
+from services.gemini_service import ask_gemini
 
 def check_security(prompt):
 
@@ -20,4 +20,5 @@ Prompt:
 {prompt}
 """
 
-    return ask_deepseek(query)
+    return ask_gemini(query, response_json=True)
+
