@@ -1,12 +1,20 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Body
+from fastapi.responses import Response
 from pydantic import BaseModel
 from config.database import db
 import json
 import re
+import numpy as np
 from datetime import datetime
+import io
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 
-# Import unified auditor service
+# Import unified auditor service and embeddings
 from services.quality_auditor import audit_prompt_quality
+from services.gemini_service import get_gemini_embedding
 
 router = APIRouter(prefix="/api", tags=["analyze"])
 
@@ -70,13 +78,40 @@ def clean_json_response(raw_string: str) -> dict:
 
 
 async def process_prompt_evaluation(prompt_text: str) -> dict:
-    """Helper to coordinate prompt engineering audits using the unified Quality Auditor."""
+    """Helper to coordinate prompt engineering audits using the unified Quality Auditor with RAG."""
     if not prompt_text.strip():
         raise HTTPException(status_code=400, detail="Prompt text cannot be empty")
         
     try:
-        # Call Qwen unified Quality Auditor
-        raw_audit = audit_prompt_quality(prompt_text)
+        # 1. RAG Retrieval Phase: Get embedding for new prompt
+        input_embedding = None
+        rag_examples = []
+        try:
+            input_embedding = get_gemini_embedding(prompt_text)
+            
+            # Fetch past high-scoring prompts that have embeddings
+            cursor = db.prompts.find({"embedding": {"$exists": True}, "overall_score": {"$gte": 80}}).limit(100)
+            past_prompts = []
+            async for doc in cursor:
+                past_prompts.append(doc)
+            
+            # Compute Cosine Similarity
+            if input_embedding and past_prompts:
+                v1 = np.array(input_embedding)
+                scored_prompts = []
+                for p in past_prompts:
+                    v2 = np.array(p["embedding"])
+                    sim = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+                    scored_prompts.append((sim, p.get("optimization", {}).get("improved_prompt", p["prompt"])))
+                
+                # Sort by similarity and get top 2
+                scored_prompts.sort(key=lambda x: x[0], reverse=True)
+                rag_examples = [x[1] for x in scored_prompts[:2]]
+        except Exception as e:
+            print(f"RAG retrieval skipped or failed: {e}")
+
+        # 2. Call unified Quality Auditor with RAG examples
+        raw_audit = audit_prompt_quality(prompt_text, rag_examples=rag_examples)
         audit_data = clean_json_response(raw_audit)
 
         # Extract values with robust defaults
@@ -101,7 +136,6 @@ async def process_prompt_evaluation(prompt_text: str) -> dict:
                 "issues": audit_data.get("security_assessment", {}).get("issues", []) if isinstance(audit_data.get("security_assessment"), dict) else []
             },
             "diagnostics": audit_data.get("diagnostics", []),
-            "suggestions": audit_data.get("suggestions", []),
             "optimization": {
                 "improved_prompt": audit_data.get("optimized_prompt", prompt_text)
             },
@@ -120,8 +154,11 @@ async def process_prompt_evaluation(prompt_text: str) -> dict:
             }
         }
 
-        # Save to MongoDB (graceful fallback if DB is offline)
+        # Embed and Save to MongoDB if score is decent (to fuel future RAG)
         try:
+            if overall_score >= 50 and input_embedding:
+                evaluation_report["embedding"] = input_embedding
+            
             # We set a maxTimeMS or timeout to prevent blocking if MongoDB is down
             await db.prompts.insert_one(evaluation_report.copy())
         except Exception as db_err:
@@ -129,6 +166,8 @@ async def process_prompt_evaluation(prompt_text: str) -> dict:
 
         # MongoDB _id is not JSON serializable directly, pop it before returning
         evaluation_report.pop("_id", None)
+        # Pop embedding so we don't send huge arrays to the frontend
+        evaluation_report.pop("embedding", None)
         return evaluation_report
 
     except Exception as e:
@@ -155,6 +194,47 @@ async def analyze_file_prompt(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Failed to decode file content. Ensure file is UTF-8 encoded.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File read failed: {str(e)}")
+
+@router.post("/generate-pdf")
+async def generate_pdf_report(data: dict = Body(...)):
+    """Generate a PDF report from analysis JSON data."""
+    try:
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+        styles = getSampleStyleSheet()
+        elements = []
+        
+        # Title
+        elements.append(Paragraph("Prompt Analysis Report", styles['Title']))
+        elements.append(Spacer(1, 20))
+        
+        # Summary Section
+        elements.append(Paragraph(f"<b>Overall Score:</b> {data.get('overall_score', 'N/A')} / 100", styles['Normal']))
+        elements.append(Paragraph(f"<b>Prompt Type:</b> {data.get('prompt_type', 'N/A')}", styles['Normal']))
+        
+        security = data.get('security', {})
+        risk_level = security.get('risk_level', 'N/A').upper()
+        elements.append(Paragraph(f"<b>Security Risk:</b> {risk_level}", styles['Normal']))
+        elements.append(Spacer(1, 20))
+        
+        # Original Prompt
+        elements.append(Paragraph("<b>Original Prompt:</b>", styles['Heading2']))
+        original_prompt = data.get('prompt', 'N/A')
+        elements.append(Preformatted(original_prompt, styles['Code']))
+        elements.append(Spacer(1, 20))
+        
+        # Optimized Prompt
+        elements.append(Paragraph("<b>Optimized Prompt:</b>", styles['Heading2']))
+        optimized_prompt = data.get('optimization', {}).get('improved_prompt', 'N/A')
+        elements.append(Preformatted(optimized_prompt, styles['Code']))
+        
+        doc.build(elements)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=report.pdf"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
 
 @router.get("/history")
 async def get_prompt_history(limit: int = 15):

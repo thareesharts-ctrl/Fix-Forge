@@ -1,6 +1,6 @@
 from services.gemini_service import ask_gemini
 
-def audit_prompt_quality(prompt_text: str) -> str:
+def audit_prompt_quality(prompt_text: str, rag_examples: list[str] = None) -> str:
     """
     Performs a unified, highly detailed evaluation of an AI prompt against the 8 core pillars of Prompt Engineering Quality:
     1. Well-structured
@@ -15,6 +15,13 @@ def audit_prompt_quality(prompt_text: str) -> str:
     Returns a strict JSON string matching the Prompt Quality schema.
     """
     
+    rag_context = ""
+    if rag_examples and len(rag_examples) > 0:
+        rag_context = "\n[RAG SYSTEM LEARNING - PAST HIGH-QUALITY EXAMPLES]\n"
+        rag_context += "The following are historical examples of highly optimized prompts from our database. Use these to infer the preferred style and structure when generating the optimized_prompt for this new input:\n"
+        for idx, ex in enumerate(rag_examples):
+            rag_context += f"--- EXAMPLE {idx+1} ---\n{ex}\n\n"
+
     query = f"""
 You are a world-class Prompt Engineer and Principal AI Instructions Designer.
 Evaluate the following prompt against the 8 core pillars of Prompt Engineering Quality:
@@ -27,16 +34,15 @@ Evaluate the following prompt against the 8 core pillars of Prompt Engineering Q
 6. **Hallucination-resistant**: Concrete negative constraints (what NOT to do), truthfulness guidelines, and clear instructions for handling out-of-scope/unknown questions.
 7. **Reusable**: Use of templates, configurable variables (like [VARIABLE] or {{{{variable}}}}), and modular instruction blocks for repeatable executions.
 8. **Professional**: Rigor of logical rules, enterprise-grade terminology, structured formatting, and professional tone.
-
+{rag_context}
 Prompt to evaluate:
 ---
 {prompt_text}
 ---
 
 CRITICAL REQUIREMENTS FOR HIGHLY RELATED & CUSTOM FEEDBACK:
-- Never return generic, placeholder, or template text. Every single feedback, suggestion, and security issue MUST analyze the actual subject matter of the input prompt.
+- Never return generic, placeholder, or template text. Every single feedback, and security issue MUST analyze the actual subject matter of the input prompt.
 - Do NOT return generic prompt engineering advice (e.g., do NOT just say "add delimiters" or "be clear").
-- The "suggestions" array must contain 3 to 5 highly specific, actionable coaching advices that target the precise logic, domain constraints, or system rules of the input prompt.
 - The "optimized_prompt" must be a fully developed, elite-engineered prompt coaching version designed specifically for this exact topic (do not use generic templates). It must include:
   1. An elite Expert Persona tailored to this task.
   2. Clear, high-performance Objectives.
@@ -69,9 +75,6 @@ Return a STRICT, valid JSON object. Do not wrap it in anything else, just the JS
       "name": "Topic-Specific Structural Review",
       "details": "Contextual detail about how the prompt structured this specific topic."
     }}
-  ],
-  "suggestions": [
-    // Provide 3-5 highly contextual suggestions directly addressing the logic, code, rules, or inputs of this prompt.
   ],
   "optimized_prompt": "Redesigned expert prompt coaching version..."
 }}

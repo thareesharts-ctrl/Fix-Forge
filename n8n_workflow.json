@@ -1,0 +1,143 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "postProcessAction": "nothing",
+        "format": "resolved",
+        "downloadAttachments": true,
+        "options": {}
+      },
+      "id": "14f2e0ca-4c91-456f-87a4-0a3f8a002a28",
+      "name": "Watch Email Inbox",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        180,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e0b8d5a1-4207-4e63-8a30-318dfa896cc9",
+              "leftValue": "={{ $binary.attachment_0.fileName }}",
+              "rightValue": ".md",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            },
+            {
+              "id": "cc07a0c8-47c1-4b15-99fa-a58e2d46e017",
+              "leftValue": "={{ $binary.attachment_0.fileName }}",
+              "rightValue": ".txt",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "879a9eb2-9d33-4f96-b6fb-a0ef09cd2ed4",
+      "name": "Check for .md or .txt",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 3,
+      "position": [
+        400,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8000/api/analyze/file",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "attachment_0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7b2e8a1d-72e5-4f4c-b17d-26f634032d18",
+      "name": "FixForge API Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@example.com",
+        "toEmail": "={{ $('Watch Email Inbox').item.json.from.address }}",
+        "subject": "=Re: {{ $('Watch Email Inbox').item.json.subject }} - Prompt Analysis Results",
+        "html": "=<h2>FixForge Prompt Analysis Report</h2>\n<p>Hello,</p>\n<p>Your prompt has been successfully analyzed by FixForge via Gemini. Here are the results:</p>\n\n<table border=\"1\" cellpadding=\"10\" style=\"border-collapse: collapse;\">\n  <tr>\n    <td><strong>Overall Score:</strong></td>\n    <td><h3 style=\"margin:0;\">{{ $json.overall_score }} / 100</h3></td>\n  </tr>\n  <tr>\n    <td><strong>Prompt Type:</strong></td>\n    <td>{{ $json.prompt_type }}</td>\n  </tr>\n  <tr>\n    <td><strong>Security Risk:</strong></td>\n    <td>{{ $json.security.risk_level }}</td>\n  </tr>\n</table>\n\n<h3>✨ Optimized Prompt:</h3>\n<pre style=\"background-color:#f4f4f4; padding:15px; border-radius:5px;\">{{ $json.optimization.improved_prompt }}</pre>\n\n<h3>📝 Original Prompt:</h3>\n<pre style=\"background-color:#f4f4f4; padding:15px; border-radius:5px;\">{{ $json.prompt }}</pre>\n\n<br>\n<p>Best regards,<br><strong>FixForge Automated Assistant</strong></p>",
+        "options": {}
+      },
+      "id": "1b084931-1e94-43cb-b097-40d6c5c0d165",
+      "name": "Send Reply Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        860,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Watch Email Inbox": {
+      "main": [
+        [
+          {
+            "node": "Check for .md or .txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for .md or .txt": {
+      "main": [
+        [
+          {
+            "node": "FixForge API Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FixForge API Analysis": {
+      "main": [
+        [
+          {
+            "node": "Send Reply Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

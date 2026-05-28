@@ -4,14 +4,36 @@ import './App.css'
 const API_URL = "http://127.0.0.1:8000/api";
 
 function App() {
-  const [prompt, setPrompt] = useState("");
+  const [tabs, setTabs] = useState([{ fileName: "", prompt: "", report: null }]);
+  const [activeTab, setActiveTab] = useState(0);
+
+  const prompt = tabs[activeTab]?.prompt || "";
+  const fileName = tabs[activeTab]?.fileName || "";
+  const report = tabs[activeTab]?.report || null;
+
+  const setPrompt = (val) => {
+    const newTabs = [...tabs];
+    newTabs[activeTab].prompt = val;
+    setTabs(newTabs);
+  };
+
+  const setFileName = (val) => {
+    const newTabs = [...tabs];
+    newTabs[activeTab].fileName = val;
+    setTabs(newTabs);
+  };
+
+  const setReport = (val) => {
+    const newTabs = [...tabs];
+    newTabs[activeTab].report = val;
+    setTabs(newTabs);
+  };
+
   const [backendAvailable, setBackendAvailable] = useState(false);
   const [dbConnected, setDbConnected] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
-  const [report, setReport] = useState(null);
   const [history, setHistory] = useState([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [fileName, setFileName] = useState("");
   const [loadingMessage, setLoadingMessage] = useState(null);
   const [theme, setTheme] = useState("dark");
   const [copied, setCopied] = useState(false);
@@ -59,24 +81,69 @@ function App() {
   };
 
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => setPrompt(event.target.result);
-      reader.readAsText(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      processFiles(files);
     }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => setPrompt(event.target.result);
-      reader.readAsText(file);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
     }
+  };
+
+  const processFiles = async (fileList) => {
+    const files = Array.from(fileList).slice(0, 5); // Max 5 files
+    const newTabs = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const text = await files[i].text();
+      newTabs.push({ fileName: files[i].name, prompt: text, report: null });
+    }
+    
+    setTabs(newTabs);
+    setActiveTab(0);
+    
+    // Automatically evaluate all uploaded files
+    autoAuditFiles(newTabs);
+  };
+
+  const autoAuditFiles = async (filesData) => {
+    if (!backendAvailable) {
+      alert("Backend API is currently offline. Cannot evaluate.");
+      return;
+    }
+    
+    setIsAuditing(true);
+    setLoadingMessage(`Analyzing ${filesData.length} files (this may take a moment)...`);
+    const results = [...filesData];
+    
+    // Process sequentially to prevent Gemini Free Tier burst rate-limiting (429 errors)
+    for (let i = 0; i < results.length; i++) {
+      const tab = results[i];
+      setLoadingMessage(`Analyzing file ${i + 1} of ${filesData.length}: ${tab.fileName}...`);
+      
+      try {
+        const response = await fetch(`${API_URL}/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: tab.prompt })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          results[i].report = data;
+          setTabs([...results]); // Update UI incrementally so they can see tabs complete!
+        }
+      } catch (e) {
+        console.error(`Error analyzing ${tab.fileName}:`, e);
+      }
+    }
+    
+    setIsAuditing(false);
+    setLoadingMessage(null);
+    if (dbConnected) loadHistory();
   };
 
   const handleAudit = async (overridePrompt = null, customLoadingMessage = null) => {
@@ -226,6 +293,26 @@ function App() {
       <main className="workspace-layout">
         {/* Left Panel - Editor */}
         <section className="glass-panel panel">
+          {tabs.length > 1 && (
+            <div className="tabs-container" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+              {tabs.map((tab, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveTab(idx)}
+                  className="sidebar-toggle-btn"
+                  style={{
+                    background: activeTab === idx ? 'var(--primary-glow)' : 'transparent',
+                    borderColor: activeTab === idx ? 'var(--primary)' : 'var(--card-border)',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {tab.fileName || `Prompt ${idx + 1}`}
+                  {tab.report && <span style={{ marginLeft: '0.5rem', color: 'var(--pass-color)' }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="panel-title">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
             Workspace
@@ -237,9 +324,16 @@ function App() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
           >
-            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.prompt" style={{ display: 'none' }} />
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileUpload} 
+              accept=".txt,.md,.prompt" 
+              multiple 
+              style={{ display: 'none' }} 
+            />
             <svg className="upload-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            <span>Drag & drop prompt files or <strong>Browse</strong></span>
+            <p style={{ color: 'var(--text-muted)' }}>Drag & drop up to 5 .md or .txt files here, or browse</p>
           </div>
 
           <div className="editor-container">
@@ -357,16 +451,6 @@ function App() {
                 </div>
               </div>
 
-              {report.suggestions && report.suggestions.length > 0 && (
-                <div className="suggestions-box">
-                  <div className="suggestions-title">💡 Actionable Coaching Suggestions</div>
-                  <div className="suggestions-list">
-                    {report.suggestions.map((s, i) => (
-                      <div className="suggestion-item" key={i}>{s}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </section>

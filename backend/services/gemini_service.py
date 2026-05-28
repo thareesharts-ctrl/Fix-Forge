@@ -9,7 +9,7 @@ load_dotenv(dotenv_path=env_path)
 
 API_KEYS_RAW = os.getenv("GEMINI_API_KEY", "")
 API_KEYS = [k.strip() for k in API_KEYS_RAW.split(",") if k.strip()]
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 
 def ask_gemini(prompt: str, response_json: bool = False):
@@ -52,8 +52,8 @@ def ask_gemini(prompt: str, response_json: bool = False):
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=60)
             
-            # If rate-limited or server error, fallback to the next key
-            if response.status_code == 429 or response.status_code >= 500:
+            # If rate-limited, quota exceeded, or server error, fallback to the next key
+            if response.status_code in [429, 403] or response.status_code >= 500:
                 last_error = f"HTTP {response.status_code}: {response.text}"
                 continue
                 
@@ -77,3 +77,49 @@ def ask_gemini(prompt: str, response_json: bool = False):
 
     # If the loop finishes without returning, all keys failed
     raise Exception(f"Google Gemini API request failed for all available keys. Last error: {last_error}")
+
+def get_gemini_embedding(text: str) -> list[float]:
+    """
+    Calls the Gemini Embedding API to generate a vector representation of the text.
+    Supports load balancing across multiple API keys.
+    """
+    if not API_KEYS or API_KEYS[0] == "your_gemini_api_key_here":
+        raise Exception("GEMINI_API_KEY is not configured.")
+
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "model": "models/gemini-embedding-2",
+        "content": {
+            "parts": [{"text": text}]
+        }
+    }
+
+    # Create a shuffled list of keys to load-balance
+    keys_to_try = list(API_KEYS)
+    random.shuffle(keys_to_try)
+    
+    last_error = None
+
+    for key in keys_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key={key}"
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            
+            # If rate-limited, quota exceeded, or server error, fallback to next key
+            if response.status_code in [429, 403] or response.status_code >= 500:
+                last_error = f"HTTP {response.status_code}: {response.text}"
+                continue
+                
+            response.raise_for_status()
+            res_data = response.json()
+            
+            if "embedding" in res_data and "values" in res_data["embedding"]:
+                return res_data["embedding"]["values"]
+            else:
+                raise Exception(f"Failed to get embedding from Gemini: {res_data}")
+                
+        except requests.exceptions.RequestException as e:
+            last_error = f"RequestException: {str(e)}"
+            continue
+
+    raise Exception(f"Google Gemini Embedding API failed for all keys. Last error: {last_error}")
