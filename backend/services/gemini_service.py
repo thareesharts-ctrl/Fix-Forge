@@ -34,6 +34,8 @@ def ask_gemini(prompt: str, response_json: bool = False):
         ],
         "generationConfig": {
             "temperature": 0.0,
+            "topK": 1,
+            "topP": 0.1
         }
     }
 

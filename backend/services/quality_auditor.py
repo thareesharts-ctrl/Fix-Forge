@@ -12,7 +12,8 @@ def audit_prompt_quality(prompt_text: str, rag_examples: list[str] = None) -> st
     7. Reusable
     8. Professional
     
-    Returns a strict JSON string matching the Prompt Quality schema.
+    Uses pure, semantic, unanchored Gemini-based analysis to evaluate, score, and optimize the prompt.
+    The evaluation is fully continuous, responsive, and realistic across the entire 0-100 scale.
     """
     
     rag_context = ""
@@ -24,7 +25,7 @@ def audit_prompt_quality(prompt_text: str, rag_examples: list[str] = None) -> st
 
     query = f"""
 You are a world-class Prompt Engineer and Principal AI Instructions Designer.
-Evaluate the following prompt against the 8 core pillars of Prompt Engineering Quality:
+Perform a deep, realistic semantic evaluation of the following prompt against the 8 core pillars of Prompt Engineering Quality:
 
 1. **Well-structured**: Usage of markdown headers, clear logical sections, structural delimiters (e.g. triple backticks, xml tags), and readability.
 2. **Safe**: Resistance to prompt injection, jailbreak attempts, system instruction leakage, and data leakage/scraping.
@@ -35,14 +36,23 @@ Evaluate the following prompt against the 8 core pillars of Prompt Engineering Q
 7. **Reusable**: Use of templates, configurable variables (like [VARIABLE] or {{{{variable}}}}), and modular instruction blocks for repeatable executions.
 8. **Professional**: Rigor of logical rules, enterprise-grade terminology, structured formatting, and professional tone.
 {rag_context}
+
 Prompt to evaluate:
 ---
 {prompt_text}
 ---
 
 CRITICAL REQUIREMENTS FOR HIGHLY RELATED & CUSTOM FEEDBACK:
-- Never return generic, placeholder, or template text. Every single feedback, and security issue MUST analyze the actual subject matter of the input prompt.
+- Never return generic, placeholder, or template text. Every single feedback, score, diagnostic check, and security issue MUST analyze the actual subject matter of the input prompt.
 - Do NOT return generic prompt engineering advice (e.g., do NOT just say "add delimiters" or "be clear").
+- Perform a thorough semantic evaluation. Evaluate the qualitative and functional strength of the instructions.
+
+CRITICAL INSTRUCTIONS FOR REALISTIC & CONTINUOUS SCORING:
+- Calculate a completely dynamic, continuous overall_score between 0 and 100 based on your expert qualitative assessment.
+- Do NOT anchor to any default, sample, or boundary numbers. There are no fixed minimums or maximums.
+- An extremely basic, empty, single-line, or brief prompt must receive a very low, realistic score (e.g., in the range of 10 to 35). An average prompt should be scored in the 50 to 75 range, and a highly engineered, production-ready prompt should receive a score above 90.
+- The 8 individual metric scores (integers from 1 to 10) must represent the actual quality of each dimension and mathematically align with the final overall_score (e.g., if metric scores average around 3/10, the overall_score should be around 30/100).
+
 - The "optimized_prompt" must be a fully developed, elite-engineered prompt coaching version designed specifically for this exact topic (do not use generic templates). It must include:
   1. An elite Expert Persona tailored to this task.
   2. Clear, high-performance Objectives.
@@ -50,35 +60,35 @@ CRITICAL REQUIREMENTS FOR HIGHLY RELATED & CUSTOM FEEDBACK:
   4. Delimited Inputs and Configurable Placeholders (e.g. `[TEXT]` or `{{{{variable}}}}`).
   5. An explicit Output Format instruction.
 
-Return a STRICT, valid JSON object. Do not wrap it in anything else, just the JSON. The JSON schema must be exactly:
+Return a STRICT, valid JSON object. Do not wrap it in anything else, just the JSON. The JSON schema must contain the exact keys shown below.
+DO NOT return the literal angle brackets or placeholder tags listed below; replace them with your actual calculated real evaluation values:
+
 {{
-  "overall_score": 82, // 0-100 overall score
-  "prompt_type": "Prompt Template", // "Prompt", "Prompt Template", "AI Instruction", "Role Prompt", "Agent Prompt", or "System Prompt"
+  "overall_score": <calculated_score_between_0_and_100_integer>,
+  "prompt_type": "<prompt_type_string_like_Prompt_Template_or_System_Prompt>",
   "metrics": {{
-    "well_structured": {{ "score": 8, "status": "pass", "feedback": "Detailed structural analysis of how this specific topic is structured..." }},
-    "safe": {{ "score": 9, "status": "pass", "feedback": "Detailed security audit of specific vulnerabilities in this prompt's domain..." }},
-    "optimized": {{ "score": 7, "status": "warning", "feedback": "Token and wording efficiency feedback for this specific instruction..." }},
-    "context_rich": {{ "score": 6, "status": "warning", "feedback": "Domain background and detail advice for this specific topic..." }},
-    "role_specific": {{ "score": 8, "status": "pass", "feedback": "Persona quality feedback specific to this expert domain..." }},
-    "hallucination_resistant": {{ "score": 5, "status": "fail", "feedback": "Negative constraints advice for this specific logic..." }},
-    "reusable": {{ "score": 4, "status": "fail", "feedback": "Variable and templating suggestions for this specific topic..." }},
-    "professional": {{ "score": 7, "status": "pass", "feedback": "Rigorous domain logic feedback for this specific topic..." }}
+    "well_structured": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_structure_for_this_prompt>" }},
+    "safe": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_safety_for_this_prompt>" }},
+    "optimized": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_token_efficiency_for_this_prompt>" }},
+    "context_rich": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_contextual_background_for_this_prompt>" }},
+    "role_specific": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_persona_quality_for_this_prompt>" }},
+    "hallucination_resistant": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_hallucination_resistance_for_this_prompt>" }},
+    "reusable": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_reusability_for_this_prompt>" }},
+    "professional": {{ "score": <calculated_metric_score_1_to_10_integer>, "status": "<pass_or_warning_or_fail>", "feedback": "<detailed_semantic_feedback_on_professionalism_and_logic_for_this_prompt>" }}
   }},
   "security_assessment": {{
-    "risk_level": "low", // "low", "medium", or "high"
-    "issues": [] // Specific identified safety/security vulnerabilities in this prompt's domain
+    "risk_level": "<low_or_medium_or_high>",
+    "issues": [<specific_identified_safety_or_security_vulnerabilities_as_strings>]
   }},
   "diagnostics": [
     {{
-      "metric": "well_structured",
-      "passed": true,
-      "name": "Topic-Specific Structural Review",
-      "details": "Contextual detail about how the prompt structured this specific topic."
+      "metric": "<metric_name>",
+      "passed": <true_or_false>,
+      "name": "<diagnostic_check_name>",
+      "details": "<domain_specific_evaluation_details>"
     }}
   ],
-  "optimized_prompt": "Redesigned expert prompt coaching version..."
+  "optimized_prompt": "<Redesigned_elite_expert_prompt_coaching_version>"
 }}
 """
     return ask_gemini(query, response_json=True)
-
-

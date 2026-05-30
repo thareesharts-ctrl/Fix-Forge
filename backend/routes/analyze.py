@@ -7,6 +7,7 @@ import re
 import numpy as np
 from datetime import datetime
 import io
+import hashlib
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted
 from reportlab.lib.styles import getSampleStyleSheet
@@ -83,6 +84,14 @@ async def process_prompt_evaluation(prompt_text: str) -> dict:
         raise HTTPException(status_code=400, detail="Prompt text cannot be empty")
         
     try:
+        # 0. Deterministic Caching: Check if this exact prompt was already evaluated
+        prompt_hash = hashlib.sha256(prompt_text.strip().encode("utf-8")).hexdigest()
+        existing_report = await db.prompts.find_one({"prompt_hash": prompt_hash})
+        if existing_report:
+            existing_report.pop("_id", None)
+            existing_report.pop("embedding", None)
+            return existing_report
+
         # 1. RAG Retrieval Phase: Get embedding for new prompt
         input_embedding = None
         rag_examples = []
@@ -156,6 +165,7 @@ async def process_prompt_evaluation(prompt_text: str) -> dict:
 
         # Embed and Save to MongoDB if score is decent (to fuel future RAG)
         try:
+            evaluation_report["prompt_hash"] = prompt_hash
             if overall_score >= 50 and input_embedding:
                 evaluation_report["embedding"] = input_embedding
             
